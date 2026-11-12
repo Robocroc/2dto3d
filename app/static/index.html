@@ -5,7 +5,7 @@
 <style>
 :root{--bg:#f6f7f9;--pn:#fff;--tx:#1d2330;--mu:#6b7385;--ac:#2563eb;--bd:#dde1e8;--er:#c62828}
 @media(prefers-color-scheme:dark){:root{--bg:#14171c;--pn:#1d2128;--tx:#e6e9ef;--mu:#8b93a5;--ac:#5b8def;--bd:#2d333d;--er:#ef5350}}
-*{box-sizing:border-box}body{margin:0;font:14px system-ui,sans-serif;background:var(--bg);color:var(--tx);display:grid;grid-template-columns:380px 1fr;height:100vh}
+[hidden]{display:none!important}*{box-sizing:border-box}body{margin:0;font:14px system-ui,sans-serif;background:var(--bg);color:var(--tx);display:grid;grid-template-columns:380px 1fr;height:100vh}
 aside{background:var(--pn);border-right:1px solid var(--bd);display:flex;flex-direction:column;overflow:hidden}
 section{padding:10px 14px;border-bottom:1px solid var(--bd)}h3{margin:0 0 6px;font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--mu)}
 button,input,textarea{font:inherit;color:inherit}button{background:var(--ac);color:#fff;border:0;border-radius:6px;padding:5px 10px;cursor:pointer}
@@ -17,16 +17,31 @@ textarea{width:100%;background:var(--bg);border:1px solid var(--bd);border-radiu
 #log{max-height:200px;overflow:auto;font-size:13px}#log p{margin:4px 0}#log .u{color:var(--ac)}
 main{position:relative}canvas{display:block;width:100%;height:100%}
 #hud{position:absolute;left:12px;top:12px;background:var(--pn);border:1px solid var(--bd);border-radius:6px;padding:6px 10px;font-size:12px;color:var(--mu)}
+
+.step{border-bottom:1px solid var(--bd);padding:10px 14px}.step.off{opacity:.38;pointer-events:none}
+.step h3{display:flex;gap:8px;align-items:center}.step h3 b{background:var(--ac);color:#fff;border-radius:50%;width:18px;height:18px;display:inline-grid;place-items:center;font-size:11px}
+label.f{display:grid;grid-template-columns:110px 1fr;gap:6px;align-items:center;margin:4px 0;font-size:13px}
+input[type=number],select{width:100%;background:var(--bg);border:1px solid var(--bd);border-radius:6px;padding:4px 6px}
+#pv{width:100%;max-height:140px;object-fit:contain;border:1px solid var(--bd);border-radius:6px;margin-top:6px;background:#fff}
+#msg{font-size:12px;color:var(--mu);margin-top:6px}#msg.err{color:var(--er)}
+aside{overflow:auto}#ops{flex:none;max-height:180px}
 </style></head><body>
 <aside>
- <section><h3>Zeichnung</h3><div class="row">
-  <input type="file" id="f" accept=".dxf"><label>Höhe <input id="h" type="number" value="2800" style="width:70px"> mm</label></div></section>
- <section><h3>Anmerkungen (Prosa)</h3><textarea id="notes" rows="3" placeholder="z. B. Wandstärke 300 mm, Fenster 1,2×1,4 m, Brüstung 900 mm …"></textarea></section>
- <section><h3>Operationen</h3><div class="row"><button class="s" id="un">↶</button><button class="s" id="re">↷</button>
-  <span style="flex:1"></span><button id="ex">STEP exportieren</button></div></section>
- <div id="ops"></div>
- <section><h3>KI-Anpassung</h3><div id="log"></div>
-  <div class="row" style="margin-top:6px"><textarea id="m" rows="2" placeholder="Anpassung in Prosa, Strg+Enter sendet"></textarea><button id="send">Senden</button></div></section>
+ <div class="step" id="s1"><h3><b>1</b> Eingaben</h3>
+  <input type="file" id="f" accept=".pdf,.dxf"><div id="fn" style="font-size:12px;color:var(--mu);margin-top:4px"></div>
+  <img id="pv" hidden alt="Vorschau der Zeichnung">
+  <label class="f">Modus<select id="mode"><option value="stoerkante">Störkantenmodell (Hüllkörper)</option><option value="gebaeude">Gebäudemodell</option></select></label>
+  <label class="f">Maßstab 1 :<input id="scale" type="number" min="0.01" step="any" placeholder="z. B. 5 für 1:5"></label>
+  <label class="f" id="rm">Aufmaß (mm)<input id="margin" type="number" min="0" value="0"></label>
+  <label class="f" id="rh" hidden>Wandhöhe (mm)<input id="h" type="number" value="2800"></label>
+  <textarea id="notes" rows="3" placeholder="Anmerkungen in Prosa, z. B. „50 mm Aufmaß rundum“, „Rohrstutzen oben nicht berücksichtigen“ …"></textarea>
+  <div class="row" style="margin-top:8px"><button id="gen" disabled>Modell erzeugen</button><span style="flex:1"></span><button class="s" id="rs" hidden>Neu beginnen</button></div>
+  <div id="msg"></div></div>
+ <div class="step off" id="s2"><h3><b>2</b> Vorschau &amp; Operationen</h3><div id="ops"></div></div>
+ <div class="step off" id="s3"><h3><b>3</b> Anpassen (Prosa)</h3><div id="log"></div>
+  <div class="row" style="margin-top:6px"><textarea id="m" rows="2" placeholder="z. B. „Aufmaß auf 80 mm erhöhen“ · Strg+Enter sendet"></textarea></div>
+  <div class="row" style="margin-top:6px"><button id="send">Senden</button><span style="flex:1"></span><button class="s" id="un">↶</button><button class="s" id="re">↷</button></div></div>
+ <div class="step off" id="s4"><h3><b>4</b> Download</h3><button id="ex">STEP herunterladen (.stp)</button></div>
 </aside>
 <main><canvas id="c"></canvas><div id="hud">Ziehen: drehen · Rechtsklick: schieben · Rad: zoomen</div></main>
 <script type="module">
@@ -41,33 +56,57 @@ const pal=['#8fa3bf','#bfa58f','#9fbf8f','#bf8fb5','#8fbfb9'];
 function resize(){const m=cv.parentElement;r.setSize(m.clientWidth,m.clientHeight,false);cam.aspect=m.clientWidth/m.clientHeight;cam.updateProjectionMatrix()}
 addEventListener('resize',resize);resize();
 (function loop(){requestAnimationFrame(loop);ctl.update();r.render(sc,cam)})();
+let S=null,busy=false;
 function show(s){
- sc.remove(grp);grp=new T.Group();sc.add(grp);
+ S=s;sc.remove(grp);grp=new T.Group();sc.add(grp);
  s.meshes.forEach((m,i)=>{const g=new T.BufferGeometry();
   g.setAttribute('position',new T.Float32BufferAttribute(m.vertices,3));g.setIndex(m.indices);g.computeVertexNormals();
   const col=m.color||(m.envelope?'#e53935':pal[i%pal.length]);
-  const mat=new T.MeshStandardMaterial({color:col,side:T.DoubleSide,transparent:m.envelope,opacity:m.envelope?.28:1,depthWrite:!m.envelope});
-  const mesh=new T.Mesh(g,mat);grp.add(mesh);
+  const mat=new T.MeshStandardMaterial({color:col,side:T.DoubleSide,transparent:m.envelope,opacity:m.envelope?.35:1,depthWrite:!m.envelope});
+  grp.add(new T.Mesh(g,mat));
   grp.add(new T.LineSegments(new T.EdgesGeometry(g,25),new T.LineBasicMaterial({color:m.envelope?0xe53935:0x222222})))});
- if(!fitted&&s.meshes.length){const b=new T.Box3().setFromObject(grp),c=b.getCenter(new T.Vector3()),d=b.getSize(new T.Vector3()).length();
-  ctl.target.copy(c);cam.position.set(c.x+d*.8,c.y-d*.8,c.z+d*.6);grid.position.z=b.min.z;fitted=true}
+ if(s.meshes.length&&!fitted){const b=new T.Box3().setFromObject(grp),c=b.getCenter(new T.Vector3()),d=b.getSize(new T.Vector3()).length();
+  ctl.target.copy(c);cam.position.set(c.x+d*.8,c.y-d*.8,c.z+d*.6);grid.position.z=b.min.z;grid.position.x=c.x;grid.position.y=c.y;grid.scale.setScalar(Math.max(d/6000,.01));fitted=true}
+ if(!s.meshes.length)fitted=false;
+ const gen=!!s.doc.generated;
+ ['s2','s3','s4'].forEach(i=>$('#'+i).classList.toggle('off',!gen));
+ $('#rs').hidden=!(gen||s.upload);
  const err=Object.fromEntries(s.errors.map(e=>[e.op,e.error]));
  $('#ops').innerHTML='';s.doc.ops.forEach(o=>{const d=document.createElement('div');
-  d.innerHTML=`<b>${o.id}</b><code class="${err[o.id]?'e':''}" title="${err[o.id]||''}">${o.type} ${JSON.stringify(o).slice(1,-1).replace(/"/g,'').replace(/^id:[^,]*,type:[^,]*,?/,'')}</code><button class="s">✕</button>`;
+  const rest=JSON.stringify(o).slice(1,-1).replace(/"/g,'').replace(/^id:[^,]*,type:[^,]*,?/,'');
+  d.innerHTML=`<b>${o.id}</b><code class="${err[o.id]?'e':''}" title="${err[o.id]||rest}">${o.type} ${rest}</code><button class="s">✕</button>`;
   d.querySelector('button').onclick=()=>post('/api/doc',{ops:s.doc.ops.filter(x=>x.id!==o.id)});$('#ops').append(d)});
- if(document.activeElement!==$('#notes'))$('#notes').value=s.doc.notes||'';
  $('#un').disabled=!s.can_undo;$('#re').disabled=!s.can_redo;
- $('#hud').textContent=`${s.meshes.length} Körper`+(s.errors.length?` · ${s.errors.length} Fehler`:'')+(s.ai?'':' · KI aus (ANTHROPIC_API_KEY fehlt)')}
+ if(s.upload){$('#fn').textContent=s.upload.name+(s.upload.pages>1?` (Seite 1 von ${s.upload.pages})`:'');
+  const pv=$('#pv');pv.hidden=!s.upload.preview;if(s.upload.preview&&!pv.dataset.n)pv.src='/api/preview.png?'+Date.now();
+  if(s.upload.scale&&!$('#scale').value)$('#scale').value=s.upload.scale}
+ else{$('#fn').textContent='';$('#pv').hidden=true;delete $('#pv').dataset.n}
+ const g=$('#gen');g.disabled=busy||!s.upload||(s.upload.kind==='pdf'&&!(+$('#scale').value>0));
+ $('#hud').textContent=`${s.meshes.length} Körper`+(s.errors.length?` · ${s.errors.length} Fehler`:'')+(s.ai?'':' · KI aus (ANTHROPIC_API_KEY fehlt) – regelbasiert')}
+function msg(t,e){$('#msg').textContent=t||'';$('#msg').className=e?'err':''}
 async function post(u,b){const x=await fetch(u,{method:'POST',headers:{'Content-Type':'application/json'},body:b?JSON.stringify(b):undefined});
- const j=await x.json();if(!x.ok){log('Fehler: '+(j.detail||x.status));return}show(j);return j}
+ const j=await x.json().catch(()=>({}));if(!x.ok){log('Fehler: '+(j.detail||x.status),'er');return}show(j);return j}
 function log(t,c=''){const p=document.createElement('p');p.className=c;p.textContent=t;$('#log').append(p);$('#log').scrollTop=1e9}
-$('#f').onchange=async e=>{const fd=new FormData();fd.append('file',e.target.files[0]);fitted=false;
- const x=await fetch('/api/dxf?height='+$('#h').value,{method:'POST',body:fd});const j=await x.json();x.ok?show(j):log('Fehler: '+j.detail)};
+$('#mode').onchange=()=>{const g=$('#mode').value==='gebaeude';$('#rh').hidden=!g;$('#rm').hidden=g};
+$('#scale').oninput=()=>S&&show(S);
+$('#f').onchange=async e=>{const f=e.target.files[0];if(!f)return;msg('Lade hoch …');$('#scale').value='';delete $('#pv').dataset.n;
+ const fd=new FormData();fd.append('file',f);const x=await fetch('/api/upload',{method:'POST',body:fd});const j=await x.json().catch(()=>({}));
+ if(!x.ok){msg(j.detail||'Upload fehlgeschlagen',1);return}msg('');show(j);
+ if(j.upload.kind==='pdf'&&!j.upload.scale)msg('Maßstab nicht erkannt – bitte aus dem Schriftfeld eintragen (?)')};
+$('#gen').onclick=async()=>{busy=true;$('#gen').disabled=true;fitted=false;msg('Start …');
+ const body={scale:+$('#scale').value||1,height:+$('#h').value,mode:$('#mode').value,margin:+$('#margin').value||0,notes:$('#notes').value};
+ const x=await fetch('/api/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+ if(!x.ok){busy=false;msg((await x.json()).detail,1);return}
+ const t=setInterval(async()=>{const j=await (await fetch('/api/job')).json();
+  if(j.status==='running')msg(j.msg);
+  else{clearInterval(t);busy=false;const s=await (await fetch('/api/state')).json();show(s);
+   if(j.status==='done'){msg('Fertig – Vorschau rechts.');log(j.reply||'(erzeugt)')}else msg(j.error,1)}},1500)};
+$('#rs').onclick=async()=>{if(confirm('Aktuelles Modell verwerfen und neu beginnen?')){$('#log').innerHTML='';$('#f').value='';$('#scale').value='';msg('');fitted=false;await post('/api/reset')}};
 $('#un').onclick=()=>post('/api/undo');$('#re').onclick=()=>post('/api/redo');
 $('#ex').onclick=()=>location='/api/export.stp';
-$('#notes').onchange=()=>post('/api/doc',{notes:$('#notes').value});
 async function send(){const t=$('#m').value.trim();if(!t)return;$('#m').value='';log(t,'u');$('#send').disabled=true;
  const j=await post('/api/chat',{message:t});if(j)log(j.reply||'(erledigt)');$('#send').disabled=false}
 $('#send').onclick=send;$('#m').onkeydown=e=>{if(e.key==='Enter'&&(e.ctrlKey||e.metaKey))send()};
-fetch('/api/state').then(r=>r.json()).then(show);
+fetch('/api/state').then(r=>r.json()).then(s=>{show(s);$('#notes').value=s.doc.notes||'';if(s.doc.scale)$('#scale').value=s.doc.scale;
+ if(s.doc.mode){$('#mode').value=s.doc.mode;$('#mode').onchange()}if(s.doc.margin)$('#margin').value=s.doc.margin});
 </script></body></html>

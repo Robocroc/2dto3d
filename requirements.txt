@@ -4,3 +4,5 @@ fastapi
 uvicorn[standard]
 anthropic
 python-multipart
+pymupdf
+shapely

@@ -5,7 +5,7 @@ creates 3d interfearing edge models from 2d input
 
 ```bash
 python3 -m venv .venv && . .venv/bin/activate
-pip install cadquery ezdxf fastapi "uvicorn[standard]" anthropic python-multipart
+pip install -r requirements.txt
 export ANTHROPIC_API_KEY=...      # für die KI-Anpassung
 cd app && uvicorn main:app --port 8765   # http://localhost:8765
 ```
@@ -17,3 +17,10 @@ Repo auf GitHub -> **Code -> Codespaces -> Create codespace on main**. Nach der 
 automatisch und der Browser öffnet Port 8765. Für die KI: unter GitHub -> Settings -> Codespaces -> Secrets
 ein Secret `ANTHROPIC_API_KEY` anlegen (vor dem Start des Codespace) und dem Repo freigeben.
 Neustart des Servers im Codespace-Terminal: `cd app && uvicorn main:app --host 0.0.0.0 --port 8765`
+
+## Ablauf (Assistent in der GUI)
+1. **Eingaben:** PDF (CAD-Vektor-PDF) oder DXF hochladen, Modus (Störkante/Gebäude), Maßstab 1:N, Aufmaß, Anmerkungen
+2. **Modell erzeugen** (mit KI, ohne Key regelbasiert) -> 3. **Vorschau** -> 4. **Anpassen** per Prosa -> 5. **STEP-Download**
+
+PDF-Import: Konturlayer (Linienbreite >= 0,8 pt, ohne `RAHM*`-Layer) werden zu Ansichten geclustert, je Ansicht ein konvexer Umriss;
+`view_hull` schneidet Vorder-/Drauf-/Seitenansicht zum Hüllkörper. Beispiel: `samples/beispiel_siebmaschine.pdf` (Maßstab 5).

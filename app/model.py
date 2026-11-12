@@ -2,7 +2,7 @@
 import cadquery as cq
 
 OP_TYPES = ["extrude", "box", "cylinder", "cut_box", "cut_cylinder", "cut_extrude",
-            "move", "offset", "bbox_envelope", "delete"]
+            "move", "offset", "bbox_envelope", "view_hull", "delete"]
 
 
 def _pts(op, doc):
@@ -14,6 +14,59 @@ def _pts(op, doc):
     if len(p) > 1 and p[0] == p[-1]:
         p = p[:-1]
     return p
+
+
+def _prism(op, doc):
+    """Profil extrudieren (inkl. optionaler Löcher aus Profil)."""
+    z, h = op.get("z", 0), op["height"]
+    s = cq.Workplane("XY").workplane(offset=z).polyline(_pts(op, doc)).close().extrude(h).val()
+    for hole in (doc["profiles"].get(op.get("profile"), {}).get("holes") or []):
+        s = s.cut(cq.Workplane("XY").workplane(offset=z).polyline([tuple(p) for p in hole]).close().extrude(h).val())
+    return s
+
+
+def _view_hull_shape(op, doc, flip):
+    """Hüllkörper = Schnitt der extrudierten Ansichts-Silhouetten (Vorder-/Drauf-/Seitenansicht)."""
+    from shapely.geometry import Polygon
+    mg = float(op.get("margin", 0) or 0)
+
+    def poly(pts):   # Aufmaß direkt an der Silhouette (robust, statt 3D-Offset)
+        pts = [tuple(map(float, p)) for p in pts]
+        return list(Polygon(pts).buffer(mg, join_style=2).exterior.coords)[:-1] if mg else pts
+    P = {k: poly(doc["profiles"][op[k]]["points"]) for k in ("front", "top", "side") if op.get(k)}
+    if len(P) < 2:
+        raise ValueError("view_hull braucht mindestens zwei Ansichten (front/top/side)")
+    mn = lambda pts, i: min(p[i] for p in pts)
+    mx = lambda pts, i: max(p[i] for p in pts)
+    ctr = lambda pts, i: (mn(pts, i) + mx(pts, i)) / 2
+    L = 1e5
+    parts = []
+    if "front" in P:   # (u=X, v=Z), Extrusion entlang Y
+        f = [(u - ctr(P["front"], 0), v - mn(P["front"], 1)) for u, v in P["front"]]
+        parts.append(cq.Workplane("XY").workplane(offset=-L).polyline(f).close().extrude(2 * L)
+                     .rotate((0, 0, 0), (1, 0, 0), 90).val())
+    if "top" in P:     # (u=X, v=Y), Extrusion entlang Z
+        t = [(u - ctr(P["top"], 0), v - mn(P["top"], 1)) for u, v in P["top"]]
+        parts.append(cq.Workplane("XY").workplane(offset=-L).polyline(t).close().extrude(2 * L).val())
+    if "side" in P:    # (u=Y, v=Z), Extrusion entlang X
+        s = P["side"]
+        pts = [((mx(s, 0) - u) if flip else (u - mn(s, 0)), v - mn(s, 1)) for u, v in s]
+        parts.append(cq.Workplane("XY").workplane(offset=-L).polyline([(z, y) for y, z in pts]).close().extrude(2 * L)
+                     .rotate((0, 0, 0), (0, 1, 0), -90).val())
+    r = parts[0]
+    for p in parts[1:]:
+        r = r.intersect(p)
+    return r
+
+
+def _view_hull(op, doc):
+    flip = op.get("side_flip", "auto")
+    if flip == "auto" and op.get("side"):
+        a, b = _view_hull_shape(op, doc, False), _view_hull_shape(op, doc, True)
+        r = a if a.Volume() >= b.Volume() else b     # konsistentere Silhouetten = größeres Schnittvolumen
+    else:
+        r = _view_hull_shape(op, doc, bool(flip) and flip != "auto")
+    return r
 
 
 def _offset_shape(shape, d):
@@ -48,16 +101,15 @@ def apply(op, doc, bodies):
     meta = {"name": op.get("name", oid), "color": op.get("color"),
             "envelope": bool(op.get("envelope"))}
     if t == "extrude":
-        s = cq.Workplane("XY").workplane(offset=op.get("z", 0)) \
-            .polyline(_pts(op, doc)).close().extrude(op["height"]).val()
-        bodies[oid] = {"shape": s, **meta}
+        bodies[oid] = {"shape": _prism(op, doc), **meta}
+    elif t == "view_hull":
+        bodies[oid] = {"shape": _view_hull(op, doc), **{**meta, "envelope": op.get("envelope", True)}}
     elif t == "box":
         bodies[oid] = {"shape": _box(op), **meta}
     elif t == "cylinder":
         bodies[oid] = {"shape": _cyl(op), **meta}
     elif t == "cut_extrude":   # Profil (z.B. Innenkontur) aus Ziel ausschneiden
-        tool = cq.Workplane("XY").workplane(offset=op.get("z", 0)) \
-            .polyline(_pts(op, doc)).close().extrude(op["height"]).val()
+        tool = _prism(op, doc)
         b = bodies[op["target"]]
         b["shape"] = b["shape"].cut(tool)
     elif t in ("cut_box", "cut_cylinder"):
