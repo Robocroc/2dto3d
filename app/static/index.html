@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Störkanten3D</title>
+<script type="importmap">{"imports":{"three":"./vendor/three.module.js"}}</script>
+<style>
+:root{--bg:#f6f7f9;--pn:#fff;--tx:#1d2330;--mu:#6b7385;--ac:#2563eb;--bd:#dde1e8;--er:#c62828}
+@media(prefers-color-scheme:dark){:root{--bg:#14171c;--pn:#1d2128;--tx:#e6e9ef;--mu:#8b93a5;--ac:#5b8def;--bd:#2d333d;--er:#ef5350}}
+*{box-sizing:border-box}body{margin:0;font:14px system-ui,sans-serif;background:var(--bg);color:var(--tx);display:grid;grid-template-columns:380px 1fr;height:100vh}
+aside{background:var(--pn);border-right:1px solid var(--bd);display:flex;flex-direction:column;overflow:hidden}
+section{padding:10px 14px;border-bottom:1px solid var(--bd)}h3{margin:0 0 6px;font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--mu)}
+button,input,textarea{font:inherit;color:inherit}button{background:var(--ac);color:#fff;border:0;border-radius:6px;padding:5px 10px;cursor:pointer}
+button.s{background:transparent;color:var(--tx);border:1px solid var(--bd)}button:disabled{opacity:.4}
+textarea{width:100%;background:var(--bg);border:1px solid var(--bd);border-radius:6px;padding:6px;resize:vertical}
+.row{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+#ops{flex:1;overflow:auto;padding:0}#ops div{display:flex;gap:6px;padding:4px 14px;border-bottom:1px solid var(--bd);font-size:12px;align-items:center}
+#ops code{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}#ops .e{color:var(--er)}
+#log{max-height:200px;overflow:auto;font-size:13px}#log p{margin:4px 0}#log .u{color:var(--ac)}
+main{position:relative}canvas{display:block;width:100%;height:100%}
+#hud{position:absolute;left:12px;top:12px;background:var(--pn);border:1px solid var(--bd);border-radius:6px;padding:6px 10px;font-size:12px;color:var(--mu)}
+</style></head><body>
+<aside>
+ <section><h3>Zeichnung</h3><div class="row">
+  <input type="file" id="f" accept=".dxf"><label>Höhe <input id="h" type="number" value="2800" style="width:70px"> mm</label></div></section>
+ <section><h3>Anmerkungen (Prosa)</h3><textarea id="notes" rows="3" placeholder="z. B. Wandstärke 300 mm, Fenster 1,2×1,4 m, Brüstung 900 mm …"></textarea></section>
+ <section><h3>Operationen</h3><div class="row"><button class="s" id="un">↶</button><button class="s" id="re">↷</button>
+  <span style="flex:1"></span><button id="ex">STEP exportieren</button></div></section>
+ <div id="ops"></div>
+ <section><h3>KI-Anpassung</h3><div id="log"></div>
+  <div class="row" style="margin-top:6px"><textarea id="m" rows="2" placeholder="Anpassung in Prosa, Strg+Enter sendet"></textarea><button id="send">Senden</button></div></section>
+</aside>
+<main><canvas id="c"></canvas><div id="hud">Ziehen: drehen · Rechtsklick: schieben · Rad: zoomen</div></main>
+<script type="module">
+import * as T from 'three';import {OrbitControls} from './vendor/OrbitControls.js';
+const $=s=>document.querySelector(s),cv=$('#c');
+const r=new T.WebGLRenderer({canvas:cv,antialias:true});const sc=new T.Scene();sc.background=new T.Color(matchMedia('(prefers-color-scheme:dark)').matches?0x14171c:0xeef0f4);
+const cam=new T.PerspectiveCamera(45,1,10,1e6);cam.up.set(0,0,1);cam.position.set(8000,-8000,6000);
+const ctl=new OrbitControls(cam,cv);sc.add(new T.AmbientLight(0xffffff,.7));const dl=new T.DirectionalLight(0xffffff,1.1);dl.position.set(1,-1,2);sc.add(dl);
+const grid=new T.GridHelper(20000,40);grid.rotation.x=Math.PI/2;sc.add(grid);
+let grp=new T.Group(),fitted=false;sc.add(grp);
+const pal=['#8fa3bf','#bfa58f','#9fbf8f','#bf8fb5','#8fbfb9'];
+function resize(){const m=cv.parentElement;r.setSize(m.clientWidth,m.clientHeight,false);cam.aspect=m.clientWidth/m.clientHeight;cam.updateProjectionMatrix()}
+addEventListener('resize',resize);resize();
+(function loop(){requestAnimationFrame(loop);ctl.update();r.render(sc,cam)})();
+function show(s){
+ sc.remove(grp);grp=new T.Group();sc.add(grp);
+ s.meshes.forEach((m,i)=>{const g=new T.BufferGeometry();
+  g.setAttribute('position',new T.Float32BufferAttribute(m.vertices,3));g.setIndex(m.indices);g.computeVertexNormals();
+  const col=m.color||(m.envelope?'#e53935':pal[i%pal.length]);
+  const mat=new T.MeshStandardMaterial({color:col,side:T.DoubleSide,transparent:m.envelope,opacity:m.envelope?.28:1,depthWrite:!m.envelope});
+  const mesh=new T.Mesh(g,mat);grp.add(mesh);
+  grp.add(new T.LineSegments(new T.EdgesGeometry(g,25),new T.LineBasicMaterial({color:m.envelope?0xe53935:0x222222})))});
+ if(!fitted&&s.meshes.length){const b=new T.Box3().setFromObject(grp),c=b.getCenter(new T.Vector3()),d=b.getSize(new T.Vector3()).length();
+  ctl.target.copy(c);cam.position.set(c.x+d*.8,c.y-d*.8,c.z+d*.6);grid.position.z=b.min.z;fitted=true}
+ const err=Object.fromEntries(s.errors.map(e=>[e.op,e.error]));
+ $('#ops').innerHTML='';s.doc.ops.forEach(o=>{const d=document.createElement('div');
+  d.innerHTML=`<b>${o.id}</b><code class="${err[o.id]?'e':''}" title="${err[o.id]||''}">${o.type} ${JSON.stringify(o).slice(1,-1).replace(/"/g,'').replace(/^id:[^,]*,type:[^,]*,?/,'')}</code><button class="s">✕</button>`;
+  d.querySelector('button').onclick=()=>post('/api/doc',{ops:s.doc.ops.filter(x=>x.id!==o.id)});$('#ops').append(d)});
+ if(document.activeElement!==$('#notes'))$('#notes').value=s.doc.notes||'';
+ $('#un').disabled=!s.can_undo;$('#re').disabled=!s.can_redo;
+ $('#hud').textContent=`${s.meshes.length} Körper`+(s.errors.length?` · ${s.errors.length} Fehler`:'')+(s.ai?'':' · KI aus (ANTHROPIC_API_KEY fehlt)')}
+async function post(u,b){const x=await fetch(u,{method:'POST',headers:{'Content-Type':'application/json'},body:b?JSON.stringify(b):undefined});
+ const j=await x.json();if(!x.ok){log('Fehler: '+(j.detail||x.status));return}show(j);return j}
+function log(t,c=''){const p=document.createElement('p');p.className=c;p.textContent=t;$('#log').append(p);$('#log').scrollTop=1e9}
+$('#f').onchange=async e=>{const fd=new FormData();fd.append('file',e.target.files[0]);fitted=false;
+ const x=await fetch('/api/dxf?height='+$('#h').value,{method:'POST',body:fd});const j=await x.json();x.ok?show(j):log('Fehler: '+j.detail)};
+$('#un').onclick=()=>post('/api/undo');$('#re').onclick=()=>post('/api/redo');
+$('#ex').onclick=()=>location='/api/export.stp';
+$('#notes').onchange=()=>post('/api/doc',{notes:$('#notes').value});
+async function send(){const t=$('#m').value.trim();if(!t)return;$('#m').value='';log(t,'u');$('#send').disabled=true;
+ const j=await post('/api/chat',{message:t});if(j)log(j.reply||'(erledigt)');$('#send').disabled=false}
+$('#send').onclick=send;$('#m').onkeydown=e=>{if(e.key==='Enter'&&(e.ctrlKey||e.metaKey))send()};
+fetch('/api/state').then(r=>r.json()).then(show);
+</script></body></html>
