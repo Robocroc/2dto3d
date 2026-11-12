@@ -9,6 +9,10 @@ python run.py            # richtet alles ein, startet GUI, öffnet Browser
 python cli.py zeichnung.pdf -o modell.stp --margin 50   # ohne GUI
 ```
 
+`run.py` aktualisiert sich bei jedem Start selbst von GitHub (ZIP-Download, `.venv` und `project.json` bleiben unberührt).
+Nur aktualisieren: `python run.py --update` · ohne Update starten: `python run.py --no-update`.
+Privates Repo: Umgebungsvariable `GITHUB_TOKEN` (Token mit Leserecht) setzen, oder das Repo öffentlich machen.
+
 ## Manuell
 ```bash
 python3 -m venv .venv && . .venv/bin/activate
