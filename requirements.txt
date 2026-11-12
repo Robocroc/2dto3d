@@ -1,0 +1,6 @@
+cadquery
+ezdxf
+fastapi
+uvicorn[standard]
+anthropic
+python-multipart

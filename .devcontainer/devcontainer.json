@@ -1,0 +1,8 @@
+{
+  "name": "Stoerkanten3D",
+  "image": "mcr.microsoft.com/devcontainers/python:3.12",
+  "postCreateCommand": "pip install -r requirements.txt",
+  "postAttachCommand": "cd app && nohup uvicorn main:app --host 0.0.0.0 --port 8765 > ../server.log 2>&1 &",
+  "forwardPorts": [8765],
+  "portsAttributes": {"8765": {"label": "Stoerkanten3D", "onAutoForward": "openBrowser"}}
+}

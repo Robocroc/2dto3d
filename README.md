@@ -11,3 +11,9 @@ cd app && uvicorn main:app --port 8765   # http://localhost:8765
 ```
 Struktur: `model.py` (Operationen -> OpenCascade), `dxf_import.py`, `ai.py` (Claude Tool-Use), `main.py` (API), `static/` (Three.js-GUI).
 Beispiel: `python samples/make_sample.py` -> `samples/raum.dxf`.
+
+## Im Browser (GitHub Codespaces)
+Repo auf GitHub -> **Code -> Codespaces -> Create codespace on main**. Nach der Installation startet der Server
+automatisch und der Browser öffnet Port 8765. Für die KI: unter GitHub -> Settings -> Codespaces -> Secrets
+ein Secret `ANTHROPIC_API_KEY` anlegen (vor dem Start des Codespace) und dem Repo freigeben.
+Neustart des Servers im Codespace-Terminal: `cd app && uvicorn main:app --host 0.0.0.0 --port 8765`
