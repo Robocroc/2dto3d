@@ -3,6 +3,13 @@ creates 3d interfearing edge models from 2d input
 
 2D-Zeichnung (DXF) + Prosa -> parametrisches 3D-Modell -> STEP.
 
+## Schnellstart lokal
+```bash
+python run.py            # richtet alles ein, startet GUI, öffnet Browser
+python cli.py zeichnung.pdf -o modell.stp --margin 50   # ohne GUI
+```
+
+## Manuell
 ```bash
 python3 -m venv .venv && . .venv/bin/activate
 pip install -r requirements.txt
