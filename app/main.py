@@ -35,7 +35,7 @@ def state():
             "can_undo": can_undo(), "can_redo": bool(S["redo"]),
             "ai": bool(os.environ.get("ANTHROPIC_API_KEY")),
             "upload": {"name": up["name"], "kind": up["kind"], "pages": up.get("pages", 1),
-                       "scale": up.get("scale"), "preview": up.get("png") is not None} if up else None,
+                       "scale": up.get("scale"), "scale_note": up.get("scale_note"), "preview": up.get("png") is not None} if up else None,
             "job": S["job"]}
 
 
@@ -59,7 +59,13 @@ async def upload(file: UploadFile, page: int = 0):
         try:
             up["png"], up["pages"] = pdf_import.render(str(path), page)
             import pymupdf
-            up["scale"] = pdf_import.detect_scale(pymupdf.open(str(path))[page].get_text("words"))
+            pg = pymupdf.open(str(path))[page]
+            dims = pdf_import.detect_scale_from_dims(pg)       # aus Bemaßungen (Mehrheitsentscheid)
+            if dims:
+                up["scale"], up["scale_note"] = dims["value"], f"aus {dims['votes']} von {dims['total']} Bemaßungen erkannt"
+            else:
+                up["scale"] = pdf_import.detect_scale(pg.get_text("words"))
+                up["scale_note"] = "aus Schriftfeld gelesen" if up["scale"] else None
         except Exception as e:
             raise HTTPException(400, f"PDF nicht lesbar: {e}")
     S["upload"] = up

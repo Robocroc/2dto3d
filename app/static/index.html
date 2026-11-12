@@ -61,10 +61,10 @@ function show(s){
  S=s;sc.remove(grp);grp=new T.Group();sc.add(grp);
  s.meshes.forEach((m,i)=>{const g=new T.BufferGeometry();
   g.setAttribute('position',new T.Float32BufferAttribute(m.vertices,3));g.setIndex(m.indices);g.computeVertexNormals();
-  const col=m.color||(m.envelope?'#e53935':pal[i%pal.length]);
-  const mat=new T.MeshStandardMaterial({color:col,side:T.DoubleSide,transparent:m.envelope,opacity:m.envelope?.35:1,depthWrite:!m.envelope});
+  const col=m.color||(m.envelope?'#e57373':pal[i%pal.length]);
+  const mat=new T.MeshStandardMaterial({color:col,side:T.DoubleSide,transparent:m.envelope,opacity:m.envelope?.9:1,depthWrite:true});
   grp.add(new T.Mesh(g,mat));
-  grp.add(new T.LineSegments(new T.EdgesGeometry(g,25),new T.LineBasicMaterial({color:m.envelope?0xe53935:0x222222})))});
+  grp.add(new T.LineSegments(new T.EdgesGeometry(g,m.envelope?45:25),new T.LineBasicMaterial({color:m.envelope?0xe53935:0x222222})))});
  if(s.meshes.length&&!fitted){const b=new T.Box3().setFromObject(grp),c=b.getCenter(new T.Vector3()),d=b.getSize(new T.Vector3()).length();
   ctl.target.copy(c);cam.position.set(c.x+d*.8,c.y-d*.8,c.z+d*.6);grid.position.z=b.min.z;grid.position.x=c.x;grid.position.y=c.y;grid.scale.setScalar(Math.max(d/6000,.01));fitted=true}
  if(!s.meshes.length)fitted=false;
@@ -92,7 +92,7 @@ $('#scale').oninput=()=>S&&show(S);
 $('#f').onchange=async e=>{const f=e.target.files[0];if(!f)return;msg('Lade hoch …');$('#scale').value='';delete $('#pv').dataset.n;
  const fd=new FormData();fd.append('file',f);const x=await fetch('/api/upload',{method:'POST',body:fd});const j=await x.json().catch(()=>({}));
  if(!x.ok){msg(j.detail||'Upload fehlgeschlagen',1);return}msg('');show(j);
- if(j.upload.kind==='pdf'&&!j.upload.scale)msg('Maßstab nicht erkannt – bitte aus dem Schriftfeld eintragen (?)')};
+ if(j.upload.kind==='pdf')msg(j.upload.scale?`Maßstab 1:${j.upload.scale} ${j.upload.scale_note||''} (?) – bitte prüfen`:'Maßstab nicht erkannt – bitte eintragen (?)')};
 $('#gen').onclick=async()=>{busy=true;$('#gen').disabled=true;fitted=false;msg('Start …');
  const body={scale:+$('#scale').value||1,height:+$('#h').value,mode:$('#mode').value,margin:+$('#margin').value||0,notes:$('#notes').value};
  const x=await fetch('/api/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});

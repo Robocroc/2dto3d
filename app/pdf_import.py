@@ -1,7 +1,7 @@
 """PDF (CAD-Vektor-PDF) -> Ansichten (konvexe Umrisse) in mm + Seitenbild + Texte."""
 import math, re
 import pymupdf
-from shapely.geometry import MultiPoint, LineString
+from shapely.geometry import MultiPoint, LineString, Polygon
 from shapely.ops import unary_union, polygonize
 
 PT = 25.4 / 72
@@ -30,6 +30,85 @@ def detect_scale(words):
     w = min(cand, key=lambda c: math.hypot((c[0] + c[2]) / 2 - (r[0] + r[2]) / 2, (c[1] + c[3]) / 2 - (r[1] + r[3]) / 2))
     a, b = (float(x.replace(",", ".")) for x in w[4].split(":"))
     return b / a if a and b else None
+
+
+NICE = [0.1, 0.2, 0.5, 1, 2, 2.5, 5, 10, 20, 25, 50, 75, 100, 125, 150, 200, 250, 500, 1000]
+
+
+def _snap(x):
+    n = min(NICE, key=lambda c: abs(math.log(x / c)))
+    return n if abs(math.log(x / n)) < 0.04 else round(x, 2)
+
+
+def detect_scale_from_dims(page):
+    """Maßstab aus Bemaßungen: Zahl im Maßtext / Länge der zugehörigen Maßlinie (auf Papier).
+    Rückgabe: dict(value, votes, total) oder None. Mehrheitsentscheid über alle Maße."""
+    rot = page.rotation_matrix
+    H, V = [], []                      # Linien (Koordinate, von, bis), nur dünne, achsenparallele
+    for d in page.get_drawings():
+        if (d.get("width") or 0) > 0.5: continue
+        for it in d["items"]:
+            if it[0] != "l": continue
+            a, b = it[1] * rot, it[2] * rot
+            if abs(a.y - b.y) < 0.3 and abs(a.x - b.x) > 4: H.append((a.y, min(a.x, b.x), max(a.x, b.x)))
+            elif abs(a.x - b.x) < 0.3 and abs(a.y - b.y) > 4: V.append((a.x, min(a.y, b.y), max(a.y, b.y)))
+
+    def span(lines, c, ctr, lo, hi, dist, half):
+        """Maßlinie nahe Textmitte: durchgehend (deckt ctr ab) oder mit Lücke am Text (links/rechts verbinden)."""
+        near = sorted({round(l[0], 1) for l in lines if abs(l[0] - c) <= dist})
+        for pos in sorted(near, key=lambda q: abs(q - c)):
+            seg = [l for l in lines if abs(l[0] - pos) < 0.4]
+            cover = [l for l in seg if l[1] - 1 <= ctr <= l[2] + 1]
+            if cover:
+                a, b = min(l[1] for l in cover), max(l[2] for l in cover)
+                return b - a
+            left = [l for l in seg if ctr - half - 14 <= l[2] <= ctr + 1 and l[1] < lo]
+            right = [l for l in seg if ctr - 1 <= l[1] <= ctr + half + 14 and l[2] > hi]
+            if left and right:
+                return max(l[2] for l in right) - min(l[1] for l in left)
+        return None
+
+    votes = []
+    for *bb, w, _b, _l, _w in page.get_text("words"):
+        if not re.fullmatch(r"\d{2,5}(?:[.,]\d)?", w): continue
+        r = (pymupdf.Rect(*bb) * rot).normalize()
+        x0, y0, x1, y1 = r.x0, r.y0, r.x1, r.y1
+        v = float(w.replace(",", "."))
+        wd, ht = x1 - x0, y1 - y0
+        if wd >= ht:                    # horizontaler Text -> horizontale Maßlinie
+            L = span(H, (y0 + y1) / 2, (x0 + x1) / 2, x0, x1, 1.8 * ht, wd / 2)
+        else:                           # vertikaler Text -> vertikale Maßlinie
+            L = span(V, (x0 + x1) / 2, (y0 + y1) / 2, y0, y1, 1.8 * wd, ht / 2)
+        if L and L * PT >= 5:
+            votes.append((v, L * PT))      # (Maßwert real, Maßlinie auf Papier in mm)
+    if len(votes) < 3: return None
+    # 1. Grobschätzung per Mehrheit (breite Klassen), 2. Gerade L = v/s - a (a = Pfeillänge) an Inlier anpassen
+    bins = {}
+    for v, l in votes: bins.setdefault(round(math.log(v / l) / 0.1), []).append((v, l))
+    cl = max(bins.values(), key=len)
+    if len(cl) < 3: return None
+    s0 = sorted(v / l for v, l in cl)[len(cl) // 2]
+    inl = [(v, l) for v, l in votes if abs(math.log(v / l / s0)) < 0.25]
+    for _ in range(3):                      # robuste Regression (Ausreißer iterativ entfernen)
+        n = len(inl)
+        if n < 3 or max(v for v, _ in inl) < 1.5 * min(v for v, _ in inl): break
+        mv, ml = sum(v for v, _ in inl) / n, sum(l for _, l in inl) / n
+        slope = sum((v - mv) * (l - ml) for v, l in inl) / sum((v - mv) ** 2 for v, _ in inl)
+        icpt = ml - slope * mv
+        if slope <= 0: break
+        keep = [(v, l) for v, l in inl if abs(l - (slope * v + icpt)) < 1.5]
+        if len(keep) == len(inl) or len(keep) < 3: inl = keep if len(keep) >= 3 else inl; break
+        inl = keep
+    n = len(inl)
+    mv, ml = sum(v for v, _ in inl) / n, sum(l for _, l in inl) / n
+    spread = sum((v - mv) ** 2 for v, _ in inl)
+    slope = sum((v - mv) * (l - ml) for v, l in inl) / spread if spread else 0
+    icpt = ml - slope * mv
+    if slope > 0 and -12 <= icpt <= 0.5 and abs(math.log((1 / slope) / s0)) < 0.15:   # Pfeilversatz plausibel
+        value = _snap(1 / slope)
+    else:
+        value = _snap(s0)
+    return {"value": value, "votes": len(inl), "total": len(votes)}
 
 
 def _points(it):
@@ -93,12 +172,37 @@ def _roles(views, page_h_mm):
     if right: max(right, key=lambda v: v["area"])["role"] = "side"
 
 
+def _silhouette(group, H, k, gap_pt):
+    """Echte (nicht konvexe) Umrisse einer Ansicht: Linien puffern (schließt kleine Lücken), Innenräume füllen."""
+    lines = [LineString([(x * k, (H - y) * k) for x, y in seg]) for seg in group if len(seg) >= 2]
+    r = 0.8 * k                                   # ~0,8 pt Papier -> mm real
+    import numpy as np, shapely
+    arr = shapely.buffer(np.array(lines, dtype=object), r, quad_segs=1, join_style=2)
+    u = shapely.union_all(arr)
+    polys = [Polygon(q.exterior) for q in (u.geoms if hasattr(u, "geoms") else [u])]   # Löcher füllen
+    polys = [q for q in unary_union(polys).geoms] if len(polys) > 1 and unary_union(polys).geom_type == "MultiPolygon" \
+        else [unary_union(polys)]
+    polys = sorted([q for q in polys if q.geom_type == "Polygon"], key=lambda q: -q.area)
+    if not polys: return []
+    big = polys[0]
+    bx = big.bounds
+    size = max(bx[2] - bx[0], bx[3] - bx[1])
+    close, tol = 0.012 * size, 0.004 * size          # Kerben schließen, Kontur glätten (Hüllkontur statt Detail)
+    out = []
+    for q in polys:
+        if q.area < 0.01 * big.area: continue
+        q = Polygon(q.buffer(close, join_style=2).buffer(-close, join_style=2).exterior).simplify(tol)
+        if q.geom_type == "Polygon" and not q.is_empty: out.append(q)
+    return out[:6]
+
+
 def extract(path, scale=None, page_no=0, gap_pt=10, min_width=0.8, rooms=False):
     doc = pymupdf.open(path)
     page = doc[page_no]
     H, W = page.rect.height, page.rect.width
     words = page.get_text("words")
-    detected = detect_scale(words)
+    dims = None if scale else detect_scale_from_dims(page)
+    detected = (dims or {}).get("value") or detect_scale(words)
     scale = scale or detected or 1.0
     k = PT * scale
     rot = page.rotation_matrix          # Vektorkoordinaten liegen im ungedrehten Seitenraum
@@ -118,17 +222,21 @@ def extract(path, scale=None, page_no=0, gap_pt=10, min_width=0.8, rooms=False):
         bbox = [min(xs), min(ys), max(xs), max(ys)]
         if max(bbox[2] - bbox[0], bbox[3] - bbox[1]) < 12 * PT * scale or len(g) < 8:
             continue
-        hull = MultiPoint(pts).convex_hull.simplify(1.0)
+        hull = MultiPoint(pts).convex_hull
         if hull.geom_type != "Polygon": continue
-        views.append({"bbox": [round(v, 1) for v in bbox], "area": hull.area, "role": None,
-                      "points": [[round(x, 1), round(y, 1)] for x, y in list(hull.exterior.coords)[:-1]]})
+        parts = _silhouette(g, H, k, gap_pt)
+        main = parts[0] if parts else hull
+        views.append({"bbox": [round(v, 1) for v in bbox], "area": main.area, "role": None, "hull": hull,
+                      "parts": parts or [hull]})
     views.sort(key=lambda v: -v["area"])
     views = [v for v in views if v["area"] >= 0.02 * views[0]["area"]] if views else views   # Schriftfeld-/Detailrauschen
     _roles(views, H * k)
     profiles = {}
     for i, v in enumerate(views, 1):
         b = v["bbox"]
-        profiles[f"v{i}"] = {"layer": "ansicht", "points": v["points"], "area": round(v["area"], 1),
+        rp = lambda poly: [[round(x, 1), round(y, 1)] for x, y in list(poly.exterior.coords)[:-1]]
+        profiles[f"v{i}"] = {"layer": "ansicht", "points": rp(v["parts"][0]), "parts": [rp(q) for q in v["parts"][1:]],
+                             "hull": rp(v["hull"].simplify(1.0)), "area": round(v["area"], 1),
                              "view": {"role": v["role"], "size": [round(b[2] - b[0], 1), round(b[3] - b[1], 1)]}}
     if rooms:   # Gebäudegrundriss: geschlossene Flächen aus Linien (?)
         lines = [LineString([(x * k, (H - y) * k) for x, y in s]) for s in segs]
@@ -140,6 +248,6 @@ def extract(path, scale=None, page_no=0, gap_pt=10, min_width=0.8, rooms=False):
                                  "points": [[round(x, 1), round(y, 1)] for x, y in list(f.exterior.coords)[:-1]],
                                  "holes": [[[round(x, 1), round(y, 1)] for x, y in list(h.coords)[:-1]] for h in f.interiors]}
     text = page.get_text("text")
-    info = {"scale": scale, "scale_detected": detected, "page_mm": [round(W * PT * scale), round(H * PT * scale)],
+    info = {"scale": scale, "scale_detected": detected, "scale_votes": dims, "page_mm": [round(W * PT * scale), round(H * PT * scale)],
             "n_contour": len(segs), "n_thin": len(thin)}
     return profiles, text, info
