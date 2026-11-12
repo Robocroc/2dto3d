@@ -94,7 +94,8 @@ def fallback_ops(doc, p):
     if p.mode == "stoerkante" and len(roles) >= 2:
         op = {"id": "huelle", "type": "view_hull", "name": "Störkontur", "envelope": True, "margin": p.margin}
         op.update({r: roles[r] for r in ("front", "top", "side") if r in roles})
-        return [op]
+        return [op] + [{"id": f"rund{i}", "type": "round_trim", "target": "huelle", **rf}
+                       for i, rf in enumerate(doc.get("rounds") or [], 1)]
     ops = []
     for pid, pr in profs.items():
         if pr.get("view"): continue
@@ -112,6 +113,7 @@ def run_generate(p: GenParams):
         if up["kind"] == "pdf":
             doc["profiles"], doc["texts"], info = pdf_import.extract(
                 up["path"], p.scale, up["page"], rooms=(p.mode == "gebaeude"))
+            doc["rounds"] = info.get("rounds", [])
         else:
             doc["profiles"], texts = dxf_import.import_dxf(up["path"]); doc["texts"] = texts
         reply = ""

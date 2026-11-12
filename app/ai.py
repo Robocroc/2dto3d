@@ -14,11 +14,13 @@ Operationen (Feld "type"):
 - cut_box {target,x,y,z,dx,dy,dz}   cut_cylinder {target,x,y,z,r,h}   (Öffnungen, Aussparungen)
 - cut_extrude {target,profile|points,height,z=0}  Profil ausschneiden (z. B. Innenkontur einer Wand)
 - view_hull {front,top,side (Profil-ids von Ansichten), margin=0, side_flip=auto|true|false}  Hüllkörper aus den Silhouetten der Ansichten (Schnitt der Extrusionen). X=Breite der Vorderansicht, Y=Tiefe, Z=Höhe. Für Störkantenmodelle der Standard.
+- round_trim {target,x,y,r,z0,z1,top=false}  Ecken um einen runden Körper abtragen (Quadrat minus Zylinder) im Höhenband z0..z1; x,y relativ zur Hüllkörper-Ursprung. Überstände über das Quadrat hinaus bleiben erhalten; top=true: Band reicht bis zur Oberkante.
 - move {target,dx,dy,dz}
 - offset {target,distance}  Aufmaß-Hüllkörper um einen Körper (Störkante), envelope=true
 - bbox_envelope {target?,margin}  Hüllquader um Körper oder alles
 - delete {target}
 Bei PDF-Maschinenzeichnungen enthält 'profiles' erkannte Ansichten (v1..: konvexe Umrisse in mm, 'view.role' = Heuristik front/top/side, Isometrie hat role null).
+'rund_kandidaten' sind automatisch erkannte runde Körper (Kreis im Grundriss x Höhenband der Vorderansicht). Übernimm sie als round_trim-Operationen auf den Hüllkörper, sofern sie zum Bild passen.
 Prüfe anhand des Bildes und der Bemaßung, ob Maßstab und Rollen stimmen; korrigiere die Rollen in den ops (nicht im Profil). Weicht eine Gesamtmaß-Bemaßung
 deutlich (>5 %) von der Ansichtsgröße ab, nenne das in der Antwort mit (?).
 Gemeinsame Felder: id (eindeutig, kurz), name, color (#rrggbb, optional), envelope (bool: als transparente Störkontur darstellen).
@@ -48,7 +50,7 @@ def _context(doc):
         if p.get("holes"): e["holes"] = len(p["holes"])
         profs.append(e)
     return json.dumps({"profiles": profs, "ops": doc["ops"], "notes": doc.get("notes", ""),
-                       "modus": doc.get("mode"), "massstab": doc.get("scale"),
+                       "modus": doc.get("mode"), "rund_kandidaten": doc.get("rounds", []), "massstab": doc.get("scale"),
                        "zeichnungstext": (doc.get("texts") or "")[:3000] if isinstance(doc.get("texts"), str)
                        else doc.get("texts", [])}, ensure_ascii=False)
 

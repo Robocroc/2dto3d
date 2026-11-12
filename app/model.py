@@ -2,7 +2,7 @@
 import cadquery as cq
 
 OP_TYPES = ["extrude", "box", "cylinder", "cut_box", "cut_cylinder", "cut_extrude",
-            "move", "offset", "bbox_envelope", "view_hull", "delete"]
+            "move", "offset", "bbox_envelope", "view_hull", "round_trim", "delete"]
 
 
 def _pts(op, doc):
@@ -103,7 +103,15 @@ def apply(op, doc, bodies):
     if t == "extrude":
         bodies[oid] = {"shape": _prism(op, doc), **meta}
     elif t == "view_hull":
-        bodies[oid] = {"shape": _view_hull(op, doc), **{**meta, "envelope": op.get("envelope", True)}}
+        bodies[oid] = {"shape": _view_hull(op, doc), "margin": float(op.get("margin", 0) or 0),
+                       **{**meta, "envelope": op.get("envelope", True)}}
+    elif t == "round_trim":    # Ecken um einen runden Körper abtragen (Quadrat minus Zylinder); Überstände bleiben
+        b = bodies[op["target"]]; mg = b.get("margin", 0)
+        r, x, y, z0, z1 = op["r"] + mg, op["x"], op["y"] + mg, op["z0"] + mg, op["z1"] + mg
+        if op.get("top"): z1 += mg + 5          # bis über die Oberkante inkl. Aufmaß
+        sq = cq.Workplane("XY").box(2 * r, 2 * r, z1 - z0, centered=(True, True, False))
+        cyl = cq.Workplane("XY").circle(r).extrude(z1 - z0)
+        b["shape"] = b["shape"].cut(sq.cut(cyl).translate((x, y, z0)).val())
     elif t == "box":
         bodies[oid] = {"shape": _box(op), **meta}
     elif t == "cylinder":

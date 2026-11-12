@@ -35,3 +35,7 @@ Neustart des Servers im Codespace-Terminal: `cd app && uvicorn main:app --host 0
 
 PDF-Import: Konturlayer (Linienbreite >= 0,8 pt, ohne `RAHM*`-Layer) werden zu Ansichten geclustert, je Ansicht ein konvexer Umriss;
 `view_hull` schneidet Vorder-/Drauf-/Seitenansicht zum Hüllkörper. Beispiel: `samples/beispiel_siebmaschine.pdf` (Maßstab 5).
+
+## Runde Körper
+Kreise im Grundriss (Kreis-Fit an Linienketten, konzentrische Ringe als Gruppe) werden mit waagerechten Kanten gleicher Breite in der
+Vorderansicht abgeglichen -> Höhenband. `round_trim` trägt dort die Ecken der Hülle ab (Quadrat minus Zylinder); Überstände (Hebel, Klemmen) bleiben.

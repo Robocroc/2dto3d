@@ -24,7 +24,8 @@ if f.suffix.lower() == ".pdf":
         d = pdf_import.detect_scale_from_dims(pymupdf.open(str(f))[a.page])
         if not d: sys.exit("Maßstab nicht erkannt – bitte --scale angeben.")
         scale = d["value"]; print(f"Maßstab 1:{scale} erkannt (aus {d['votes']} von {d['total']} Bemaßungen) (?)")
-    doc["profiles"], _, _ = pdf_import.extract(str(f), scale, a.page, rooms=(a.mode == "gebaeude"))
+    doc["profiles"], _, info = pdf_import.extract(str(f), scale, a.page, rooms=(a.mode == "gebaeude"))
+    doc["rounds"] = info.get("rounds", [])
 else:
     doc["profiles"], _ = dxf_import.import_dxf(str(f))
 
@@ -33,6 +34,9 @@ if a.mode == "stoerkante" and len(roles) >= 2:
     print("Ansichten:", roles)
     doc["ops"] = [{"id": "huelle", "type": "view_hull", "margin": a.margin, "envelope": True,
                    **{r: roles[r] for r in ("front", "top", "side") if r in roles}}]
+    for i, rf in enumerate(doc.get("rounds") or [], 1):
+        print(f"Runder Körper {i}: Ø{2 * rf['r']:.0f} mm, Höhe {rf['z0']:.0f}-{rf['z1']:.0f} mm")
+        doc["ops"].append({"id": f"rund{i}", "type": "round_trim", "target": "huelle", **rf})
 else:
     doc["ops"] = [{"id": f"e_{k}", "type": "extrude", "profile": k, "height": a.height}
                   for k, p in doc["profiles"].items() if not p.get("view")]
