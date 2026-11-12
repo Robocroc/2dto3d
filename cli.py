@@ -14,6 +14,8 @@ ap.add_argument("--mode", choices=["stoerkante", "gebaeude"], default="stoerkant
 ap.add_argument("--height", type=float, default=2800, help="Extrusionshöhe in mm (Gebäude/DXF)")
 ap.add_argument("--page", type=int, default=0)
 a = ap.parse_args()
+try: print("Build", (Path(__file__).parent / "VERSION").read_text().strip())
+except Exception: pass
 
 f = Path(a.datei)
 doc = {"profiles": {}, "ops": [], "notes": "", "texts": [], "generated": True}

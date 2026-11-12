@@ -16,7 +16,7 @@ textarea{width:100%;background:var(--bg);border:1px solid var(--bd);border-radiu
 #ops code{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}#ops .e{color:var(--er)}
 #log{max-height:200px;overflow:auto;font-size:13px}#log p{margin:4px 0}#log .u{color:var(--ac)}
 main{position:relative}canvas{display:block;width:100%;height:100%}
-#hud{position:absolute;left:12px;top:12px;background:var(--pn);border:1px solid var(--bd);border-radius:6px;padding:6px 10px;font-size:12px;color:var(--mu)}
+#ver{position:absolute;right:12px;bottom:10px;font-size:12px;color:var(--mu);background:var(--pn);border:1px solid var(--bd);border-radius:6px;padding:3px 8px}#hud{position:absolute;left:12px;top:12px;background:var(--pn);border:1px solid var(--bd);border-radius:6px;padding:6px 10px;font-size:12px;color:var(--mu)}
 
 .step{border-bottom:1px solid var(--bd);padding:10px 14px}.step.off{opacity:.38;pointer-events:none}
 .step h3{display:flex;gap:8px;align-items:center}.step h3 b{background:var(--ac);color:#fff;border-radius:50%;width:18px;height:18px;display:inline-grid;place-items:center;font-size:11px}
@@ -43,7 +43,7 @@ aside{overflow:auto}#ops{flex:none;max-height:180px}
   <div class="row" style="margin-top:6px"><button id="send">Senden</button><span style="flex:1"></span><button class="s" id="un">↶</button><button class="s" id="re">↷</button></div></div>
  <div class="step off" id="s4"><h3><b>4</b> Download</h3><button id="ex">STEP herunterladen (.stp)</button></div>
 </aside>
-<main><canvas id="c"></canvas><div id="hud">Ziehen: drehen · Rechtsklick: schieben · Rad: zoomen</div></main>
+<main><canvas id="c"></canvas><div id="ver" title="Build-Nummer"></div><div id="hud">Ziehen: drehen · Rechtsklick: schieben · Rad: zoomen</div></main>
 <script type="module">
 import * as T from 'three';import {OrbitControls} from './vendor/OrbitControls.js';
 const $=s=>document.querySelector(s),cv=$('#c');
@@ -58,7 +58,7 @@ addEventListener('resize',resize);resize();
 (function loop(){requestAnimationFrame(loop);ctl.update();r.render(sc,cam)})();
 let S=null,busy=false;
 function show(s){
- S=s;sc.remove(grp);grp=new T.Group();sc.add(grp);
+ S=s;if(s.version)$('#ver').textContent='Build '+s.version.build+(s.version.sha?' · '+s.version.sha:'');sc.remove(grp);grp=new T.Group();sc.add(grp);
  s.meshes.forEach((m,i)=>{const g=new T.BufferGeometry();
   g.setAttribute('position',new T.Float32BufferAttribute(m.vertices,3));g.setIndex(m.indices);g.computeVertexNormals();
   const col=m.color||(m.envelope?'#e57373':pal[i%pal.length]);

@@ -25,6 +25,7 @@ def update():
         print(f"Update übersprungen ({e}). Privates Repo? -> GITHUB_TOKEN setzen oder Repo öffentlich machen.")
         return
     top, n = zf.namelist()[0].split("/")[0], 0
+    (ROOT / ".build_sha").write_text(top.rsplit("-", 1)[-1][:7])        # Zip-Ordner heißt <owner>-<repo>-<sha>
     for name in zf.namelist():
         rel = name[len(top) + 1:]
         if not rel or name.endswith("/") or rel.startswith(KEEP):

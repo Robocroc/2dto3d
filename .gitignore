@@ -3,3 +3,4 @@ __pycache__/
 project.json
 server.log
 *.pyc
+.build_sha

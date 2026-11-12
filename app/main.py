@@ -15,6 +15,25 @@ S = {"doc": json.loads(SAVE.read_text()) if SAVE.exists() else copy.deepcopy(EMP
      "undo": [], "redo": [], "chat": [], "upload": None, "job": {"status": "idle"}}
 
 
+def version():
+    """Build-Nr. aus VERSION (bei jedem Commit erhöht); Kurz-Hash aus .git oder (ZIP-Update) aus .build_sha."""
+    root = ROOT.parent
+    try: build = (root / "VERSION").read_text().strip()
+    except Exception: build = "?"
+    sha = ""
+    try:
+        import subprocess
+        sha = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=root, capture_output=True, text=True, timeout=3).stdout.strip()
+    except Exception: pass
+    if not sha:
+        try: sha = (root / ".build_sha").read_text().strip()
+        except Exception: pass
+    return {"build": build, "sha": sha}
+
+
+VER = version()
+
+
 def save():
     SAVE.write_text(json.dumps(S["doc"], ensure_ascii=False))
 
@@ -36,7 +55,7 @@ def state():
             "ai": bool(os.environ.get("ANTHROPIC_API_KEY")),
             "upload": {"name": up["name"], "kind": up["kind"], "pages": up.get("pages", 1),
                        "scale": up.get("scale"), "scale_note": up.get("scale_note"), "preview": up.get("png") is not None} if up else None,
-            "job": S["job"]}
+            "job": S["job"], "version": VER}
 
 
 @app.get("/api/state")
